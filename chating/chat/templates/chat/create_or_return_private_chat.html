@@ -1,0 +1,44 @@
+
+<script type="text/javascript">
+	
+	function createOrReturnPrivateChat(id){
+		payload = {
+			"csrfmiddlewaretoken": "{{ csrf_token }}",
+			"user2_id": id,
+		}
+		$.ajax({
+			type: 'POST',
+			dataType: "json",
+			// url: "{% url 'chat:create-or-return-private-chat' %}",
+			//url: "//127.0.0.1:8000/chat/create_or_return_private_chat/", // Dev
+			url: "{{BASE_URL}}/chat/create_or_return_private_chat/", // production
+			data: payload,
+			timeout: 5000,
+			success: function(data) {
+				console.log("SUCCESS", data)
+				if(data['response'] == "Successfully got the chat."){
+					chatroomId = data['chatroom_id']
+					OnGetOrCreateChatroomSuccess(chatroomId)
+				}
+				else if(data['response'] != null){
+					alert(data['response'])
+				}
+			},
+			error: function(data) {
+				console.error("ERROR...", data)
+				alert("Something went wrong.")
+			},
+		});
+	}
+
+
+	function OnGetOrCreateChatroomSuccess(chatroomId){
+		console.log("CHATROOM ID: " + chatroomId)
+		// Weird work-around for passing arg to url
+		var url = "{% url 'chat:private-chat-room' room_id=53252623623632623 %}".replace("53252623623632623", chatroomId)
+		var win = window.open(url)
+		win.focus()
+	}
+	
+
+</script>

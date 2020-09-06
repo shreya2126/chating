@@ -1,0 +1,429 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+<script src="{% static 'bootstrap/js/jquery.min.js' %}"></script>
+
+<style type="text/css">
+	.chat-log {
+		height: 300px;
+		/*border: 1px solid #000;*/
+		overflow-x: hidden;
+		overflow-y: auto;
+		padding: 10px;
+		background-color: #fff;
+		font-size: 0.9em;
+		flex-direction: column-reverse;
+
+	}
+	#id_connected_users_container{
+		flex-basis: 150px;
+		height: 300px;
+		/*border: 1px solid #000;*/
+		overflow-x: hidden;
+		overflow-y: auto;
+		padding: 10px;
+		background-color: #fff;
+		font-size: 0.9em;
+	}
+	#id_chatroom_loading_spinner{
+		position: absolute;
+		margin-top: 40px;
+	}
+	#id_online_users_title{
+		font-weight: 550;
+		color: green;
+	}
+	#chat-log-container {
+		height: 300px;
+	}
+	.chat-message-input-container{
+		/*border: 1px solid #000;*/
+		outline: none;
+		box-shadow: none;
+	}
+	.chat-message-input{
+		outline: none;
+		border: 1px solid #fff;
+		border-top: 2px solid var(--main-background-color);
+	}
+	.username-span{
+		font-weight: 600;
+		margin-top: 0px;
+		margin-bottom: auto;
+		margin-left: 5px;
+		margin-right: 5px;
+	}
+	.msg-span{
+		font-weight: 450;
+		margin-top: 0px;
+		margin-bottom: auto;
+		white-space: normal;
+	}
+	.message-container{
+		margin-top: 10px;
+		justify-content: start;
+	}
+	.profile-image{
+		width: 33px;
+		height: 33px;
+		margin-top: 0px;
+		margin-bottom: auto;
+	}
+	.profile-image-small{
+		width: 25px;
+		height: 25px;
+		margin-top: 0px;
+		margin-bottom: auto;
+		margin-right: 5px;
+	}
+	.profile-image:hover{
+		cursor: pointer;
+	}
+	.profile-image-small:hover{
+		cursor: pointer;
+	}
+	.username-span:hover{
+		cursor: pointer;
+	}
+	.material-icons:hover{
+		cursor: pointer;
+	}
+	.card{
+		border-radius: 12px;
+	}
+</style>
+
+<div class="container">
+	<div class="card">
+		<div class="d-flex flex-row align-items-center card-header" id="id_room_title">
+		{% if request.user == user1 %}
+		<a class="d-flex flex-row" href="{% url 'account:view' user_id=user2.id%}" target="_blank">
+			<img class="profile-image rounded-circle img-fluid" src="{{user2.profile_image.url}}">
+			<h3>&nbsp;{{user2.username}}&nbsp;</h3>
+		</a>
+		{% else %}
+		<a class="d-flex flex-row" href="{% url 'account:view' user_id=user1.id%}" target="_blank">
+			<img class="profile-image rounded-circle img-fluid" src="{{user1.profile_image.url}}">
+			<h3>&nbsp;{{user1.username}}&nbsp;</h3>
+		</a>
+		{% endif %}
+		
+		</div>
+		<div class="d-flex flex-row card-body p-1">
+			<div class="d-flex flex-column flex-grow-1" id="id_chat_log_container">
+				
+				<div class="d-flex flex-row justify-content-center" id="id_chatroom_loading_spinner_container">
+					<div class="spinner-border text-primary"  id="id_chatroom_loading_spinner" role="status"  style="display: none; ">
+						<span class="sr-only">Loading...</span>
+					</div>
+				</div>
+				<div class="d-flex chat-log" id="id_chat_log">
+					
+				</div>
+				<span class="{% if not debug %}d-none{% endif %} page-number" id="id_page_number">1</span>
+				<span class="{% if not debug %}d-none{% endif %} has-joined-room" id="id_has_joined_room">False</span>
+				
+				<div class="d-flex flex-row chat-message-input-container">
+					<input class="flex-grow-1 chat-message-input" id="id_chat_message_input" type="text">
+					<button class="btn btn-primary chat-message-submit-button">
+						<span id="id_chat_message_submit" class="material-icons">send
+						</span>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+</div>
+
+<script>
+
+
+	function setPaginationExhausted(){
+		setPageNumber("-1")
+	}
+
+	function setHasJoinedRoom(hasJoinedRoom){
+		document.getElementById("id_has_joined_room").innerHTML = hasJoinedRoom
+	}
+
+	function getRoomChatMessages(){
+		console.log("getRoomChatMessages called.")
+		var pageNumber = document.getElementById("id_page_number").innerHTML
+		var hasJoinedRoom = document.getElementById("id_has_joined_room").innerHTML
+		var requestData = {
+			"page_number": pageNumber,
+			"room_id": "{{room_id}}",
+			"has_joined_room": hasJoinedRoom,
+		}
+		console.log("page number: " + pageNumber)
+		if(pageNumber != "-1"){
+			displayChatroomLoadingSpinner(true)
+			setPageNumber("-1") // loading in progress
+			$.ajax({
+					type: 'GET',
+					dataType: "json",
+					url: "{% url 'chat:get-room-chat-messages' room_id=room_id %}",
+					data: requestData,
+					timeout: 5000,
+					success: function(data) {
+						console.log("SUCCESS", data)
+						var newMessages = data['messages']
+						if (newMessages != null && newMessages != "None"){
+							newMessages.forEach(message => appendChatMessage(0, message['message'], message['username'], message['user_id'], message['profile_image'], true, false))
+							var newPageNumber = data['page_number']
+							setPageNumber(newPageNumber)
+						}
+						else{
+							setPaginationExhausted() // no more messages
+						}
+					},
+					error: function(data) {
+						console.error("ERROR...", data)
+					},
+					complete: function(data){
+						console.log("on complete")
+						displayChatroomLoadingSpinner(false)
+					}
+				});
+		}
+	}
+
+	function setPageNumber(pageNumber){
+		document.getElementById("id_page_number").innerHTML = pageNumber
+	}
+
+	document.getElementById("id_chat_log").addEventListener("scroll", function(e){
+		var position = document.getElementById("id_chat_log").scrollTop
+		if(position == 0){
+			getRoomChatMessages()
+		}
+	})
+
+	function appendChatMessage(messageType, message, uName, user_id, pImage, maintainPosition, isNewMessage){
+		var chatLog = document.getElementById("id_chat_log")
+		var msg = "";
+		var username = ""
+		var profile_image = "{% static 'media/profile_images/logo_1080_1080.png' %}";
+		switch (messageType) {
+			case 0:
+				profile_image = pImage
+				username = uName + ": "
+				msg = message + '\n'
+				break;
+			case 1:
+				// Warning / Advice messages
+				msg = "WARNING: " + message + '\n'
+				break;
+			case 2:
+				// Alert / Danger messages
+				msg = "ALERT: " + message + '\n'
+				break;
+			case 3:
+				// "Muted" messages
+				msg = "Muted: " + message + '\n'
+				break;
+			case 4:
+				// User joined room
+				profile_image = pImage
+				username = uName + ": "
+				msg = " connected.\n"
+				break;
+			case 5:
+				// User left room
+				profile_image = pImage
+				username = uName + ": "
+				msg = " disconnected.\n"
+				break;
+			default:
+				console.log("Unsupported message type!");
+				return;
+		}
+		var newMessageDiv = document.createElement("div")
+		newMessageDiv.classList.add("d-flex")
+		newMessageDiv.classList.add("flex-row")
+		newMessageDiv.classList.add("message-container")
+
+		var profileImage = document.createElement("img")
+		profileImage.addEventListener("click", function(e){
+			selectUser(user_id)
+		})
+		profileImage.classList.add("profile-image")
+		profileImage.classList.add("rounded-circle")
+		profileImage.classList.add("img-fluid")
+		profileImage.src = profile_image
+		profileImage.id = uName
+		newMessageDiv.appendChild(profileImage)
+
+		var usernameSpan = document.createElement("span")
+		usernameSpan.innerHTML = username
+		usernameSpan.classList.add("username-span")
+		usernameSpan.addEventListener("click", function(e){
+			selectUser(user_id)
+		})
+		newMessageDiv.appendChild(usernameSpan)
+
+		var msgSpan = document.createElement("span")
+		msgSpan.innerHTML = msg
+		msgSpan.classList.add("msg-span")
+		newMessageDiv.appendChild(msgSpan)
+
+		if(isNewMessage){
+			chatLog.insertBefore(newMessageDiv, chatLog.firstChild)
+		}
+		else{
+			chatLog.appendChild(newMessageDiv)
+		}
+		
+		if(!maintainPosition){
+			chatLog.scrollTop = chatLog.scrollHeight
+		}
+	}
+
+	// Correctly decide between ws:// and wss://
+	var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+	var ws_path = ws_scheme + '://' + window.location.host + "/chat/{{room_id}}/"; // development
+	//var ws_path = ws_scheme + '://' + window.location.host + ":8001/chat/{{room_id}}/"; // production
+	// console.log("Connecting to " + ws_path);
+	var chatSocket = new WebSocket(ws_path);
+
+	// Handle incoming messages
+	chatSocket.onmessage = function(message) {
+		// Decode the JSON
+		console.log("Got chat websocket message " + message.data);
+		// console.log("Got websocket message.");
+		var data = JSON.parse(message.data);
+		// Handle errors (ClientError)
+		if (data.error) {
+			console.error(data.error + ": " + data.message)
+			showClientErrorModal(data.message)
+			return;
+		}
+		// Handle joining (Client perspective)
+		if (data.join) {
+			console.log("Joining room " + data.join);
+			setHasJoinedRoom("True")
+			getRoomChatMessages()
+		}
+		// Handle leaving (client perspective)
+		else if (data.leave) {
+			// do nothing
+			console.log("Leaving room " + data.leave);
+		}
+		// Handle getting a message
+		else if (data.message || data.msg_type != 0) {
+			appendChatMessage(data.msg_type, data.message, data.username, data.user_id, data.profile_image, false, true)
+		}
+		else {
+			var textNode
+			console.log("Cannot handle message!");
+		}
+	};
+
+	chatSocket.addEventListener("open", function(e){
+		console.log("ChatSocket OPEN")
+		// join chat room
+		if("{{request.user.is_authenticated}}"){
+			chatSocket.send(JSON.stringify({
+				"command": "join",
+				"room": "{{room_id}}"
+			}));
+		}
+	})
+
+	chatSocket.onclose = function(e) {
+		console.error('Chat socket closed unexpectedly');
+	};
+
+	chatSocket.onOpen = function(e){
+		console.log("ChatSocket onOpen", e)
+	}
+
+	chatSocket.onerror = function(e){
+        console.log('ChatSocket error', e)
+    }
+
+    if (chatSocket.readyState == WebSocket.OPEN) {
+    	console.log("ChatSocket OPEN")
+    } else if (chatSocket.readyState == WebSocket.CONNECTING){
+        console.log("ChatSocket connecting..")
+    }
+
+    
+	document.querySelector('#id_chat_message_input').focus();
+	document.querySelector('#id_chat_message_input').onkeyup = function(e) {
+		if (e.keyCode === 13) {  // enter, return
+			document.querySelector('#id_chat_message_submit').click();
+		}
+	};
+	
+	document.querySelector('#id_chat_message_submit').onclick = function(e) {
+		const messageInputDom = document.querySelector('#id_chat_message_input');
+		const message = messageInputDom.value;
+		chatSocket.send(JSON.stringify({
+			"command": "send",
+			"room": "{{room_id}}",
+			"message": message
+		}));
+		messageInputDom.value = '';
+	};
+
+	function showClientErrorModal(message){
+		document.getElementById("id_client_error_modal_body").innerHTML = message
+		document.getElementById("id_trigger_client_error_modal").click()
+	}
+
+	function selectUser(user_id){
+		// Weird work-around for passing arg to url
+		var url = "{% url 'account:view' user_id=53252623623632623 %}".replace("53252623623632623", user_id)
+		var win = window.open(url, "_blank")
+		win.focus()
+	}
+
+</script>
+
+<script type="text/javascript">
+
+
+	function displayChatroomLoadingSpinner(isDisplayed){
+		console.log("display spinner " + isDisplayed)
+		var spinner = document.getElementById("id_chatroom_loading_spinner")
+		if(isDisplayed){
+			spinner.style.display = "block"
+		}
+		else{
+			spinner.style.display = "none"
+		}
+	}
+
+</script>
+
+
+<!-- Client Error MODAL -->
+<button type="button" id="id_trigger_client_error_modal" class="d-none btn btn-primary" data-toggle="modal" data-target="#id_client_error_modal">
+</button>
+<div class="modal fade" id="id_client_error_modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Socket Client Error</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="id_client_error_modal_body">Something went wrong.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal" id="id_client_error_modal_close_btn">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Client Error MODAL -->
+
+
+
+{% endblock content %}
